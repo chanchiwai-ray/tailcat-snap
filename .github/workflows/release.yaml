@@ -23,10 +23,10 @@ jobs:
       - name: Download the built snap from check workflow
         uses: actions/download-artifact@v8
         with:
-          name: snap_${{ env.SYSTEM_ARCH }}
+          name: tailcat_snap_${{ env.SYSTEM_ARCH }}
 
       - name: Find the downloaded snap file
-        run: echo "SNAP_FILE=$(find . -name "*.snap")" >> $GITHUB_ENV
+        run: echo "SNAP_FILE=$(find . -name '*.snap' -print -quit)" >> $GITHUB_ENV
 
       - uses: snapcore/action-publish@v1
         env:
