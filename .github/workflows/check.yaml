@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Snapcraft
+        uses: canonical/craft-actions/snapcraft/setup@main
+
+      - name: Verify snap builds successfully
+        id: build
+        uses: canonical/action-build@v1
+
+      - name: Determine system architecture
+        run: echo "SYSTEM_ARCH=$(uname -m)" >> $GITHUB_ENV
+
+      - name: Upload the built snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: tailcat_snap_${{ env.SYSTEM_ARCH }}
+          path: ${{ steps.build.outputs.snap }}
+
+  functest:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y snapd
+
+      - name: Determine system architecture
+        run: echo "SYSTEM_ARCH=$(uname -m)" >> $GITHUB_ENV
+
+      - name: Download snap file artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: tailcat_snap_${{ env.SYSTEM_ARCH }}
+
+      - name: Find the downloaded snap file
+        run: echo "SNAP_FILE=$(find . -name '*.snap' -print -quit)" >> $GITHUB_ENV
+
+      - name: Run func tests
+        run: |
+          sudo snap install --dangerous "${{ env.SNAP_FILE }}"
+          echo "Skipping functional tests for now, as they are not yet working in the runner."
