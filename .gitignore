@@ -1,1 +1,5 @@
 *.snap
+tests/.venv/
+tests/.pytest_cache/
+tests/functional/__pycache__/
+

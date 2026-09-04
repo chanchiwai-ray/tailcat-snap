@@ -2,8 +2,8 @@
 
 This document lists behaviors observed while testing the `tailcat` snap under `confinement: strict`
 with only the `home`, `network`, and `network-bind` plugs connected (see [`../tests/`](../tests/)
-for the automated scripts that reproduce these checks). It separates what works from what doesn't,
-with the underlying cause for each failure.
+for the automated pytest suite that reproduces these checks). It separates what works from what
+doesn't, with the underlying cause for each failure.
 
 ## Summary table
 
@@ -301,3 +301,62 @@ throughout this project's own SOCKS testing and works correctly, including for e
 the open internet (see `available_features.md`). The same `stage-packages` bundling approach used
 for `openssh-client` (issue #3) could in principle bundle `curl` too, if execing it as a direct
 `<cmd>` child of the confined `tailcat` process were a hard requirement.
+
+### 7. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
+
+Discovered while building the two-container functional test suite under [`../tests/`](../tests/)
+(each "client"/"server" is a separate, unprivileged LXD container so they have genuinely distinct
+network namespaces). A direct shell redirect of `tailcat`'s own output to a regular file --
+`tailcat ... > logfile 2>&1` -- silently produces a **0-byte** logfile: the process still runs
+normally and exits 0, it just never manages to write anything, anywhere.
+
+**Root cause** (confirmed via `dmesg`/`journalctl -k` inside the container's LXD host): this is
+`snap-confine`'s *own* AppArmor profile -- not `tailcat`'s app-level confinement, which never even
+gets a chance to run -- denying `file_inherit` for a write fd pointing at a regular file, specific
+to the uid-shifted namespace an unprivileged container maps its "root" user to:
+
+```
+apparmor="DENIED" operation="file_inherit" profile="/usr/lib/snapd/snap-confine"
+name="/root/f1.log" requested_mask="w" denied_mask="w" fsuid=1000000 ouid=1000000
+```
+
+(`fsuid=1000000`/`ouid=1000000` is the classic signature of LXD's default unprivileged
+uid-shifting -- container "root" maps to host uid 1000000+.) The shell (`bash`, unconfined) opens
+the destination file fine; the problem is specifically `snap-confine` refusing to let the about-to-
+be-confined child *inherit* that already-open write fd once it detects this uid-shifted context.
+
+**Workaround:** pipe through an intermediate, unconfined process instead of a direct file redirect,
+e.g.:
+
+```sh
+tailcat ... 2>&1 | tee logfile > /dev/null
+```
+
+This way the confined process's own stdout fd is a **pipe** (which `snap-confine`'s `file_inherit`
+policy does allow), while the actual regular-file `open()` happens in `tee`, which is never
+confined. This is exactly what [`../tests/functional/helpers.py`](../tests/functional/helpers.py)'s
+`run_bg()` does, and is the only reason the (otherwise identical) bash smoke-test suite this project
+used before didn't hit this: those tests ran directly on a single host with a normal (non-uid-
+shifted) root user, not inside a nested unprivileged container.
+
+**Scope:** this is specific to running a strict-confinement snap inside an *unprivileged* LXD
+container (or likely any other uid-shifted user-namespace sandbox); it does not affect normal
+installs on a real machine or VM, and is unrelated to anything in this project's own
+`snap/snapcraft.yaml` packaging.
+
+### 8. `tailcat forward` has no ephemeral (`0:remote`) local-port syntax
+
+Also discovered while building the two-container functional test suite. `tailcat forward`'s own
+`--help` only documents `<tc-addr> <port>` (same local/remote) or `<tc-addr>
+<local:remote>` with an explicit, non-zero local port -- there's no "let the OS pick a free local
+port" convention (e.g. `0:remote`, common in other port-forwarding tools):
+
+```sh
+$ tailcat forward "$ADDR" 0:18091
+mapping "0:18091" is invalid: local port: invalid port "0"
+```
+
+This is a real (minor) upstream CLI behavior, not a packaging/confinement issue --
+[`../tests/functional/test_exit_node_and_proxying.py`](../tests/functional/test_exit_node_and_proxying.py)'s
+`test_forward` now just picks a fixed local port itself (e.g. `28091:18091`) instead of trying to
+parse an auto-assigned one back out of `forward`'s output, which doesn't print one anyway.
