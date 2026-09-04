@@ -10,12 +10,16 @@ import helpers
 
 
 def test_forward(server, client, server_workdir, client_workdir):
-    helpers.run_bg(server, "python3 -m http.server 18091 --directory /tmp", f"{server_workdir}/http.log")
+    helpers.run_bg(
+        server, "python3 -m http.server 18091 --directory /tmp", f"{server_workdir}/http.log"
+    )
     server_log = f"{server_workdir}/fwd_server.log"
     helpers.run_bg(server, "tailcat serve 18091", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "forward: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     # tailcat forward's docs only show <tc-addr> <port> (same local/remote)
@@ -38,12 +42,16 @@ def test_forward(server, client, server_workdir, client_workdir):
 
 
 def test_socks_non_exit_node(server, client, server_workdir, client_workdir):
-    helpers.run_bg(server, "python3 -m http.server 18092 --directory /tmp", f"{server_workdir}/http.log")
+    helpers.run_bg(
+        server, "python3 -m http.server 18092 --directory /tmp", f"{server_workdir}/http.log"
+    )
     server_log = f"{server_workdir}/socks_server.log"
     helpers.run_bg(server, "tailcat serve 18092", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "socks: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     client_log = f"{client_workdir}/socks_client.log"
@@ -74,7 +82,9 @@ def test_exit_node_socks_routes_to_internet(server, client, server_workdir, clie
     helpers.run_bg(server, "tailcat serve exit-node", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "exit-node: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     client_log = f"{client_workdir}/exit_socks.log"
@@ -96,7 +106,9 @@ def test_exit_node_ssh_dash_p_reaches_real_sshd(server, client, server_workdir):
     helpers.run_bg(server, "tailcat serve exit-node", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "exit-node ssh -p setup: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     # This only proves the TCP route through the exit node works (we don't

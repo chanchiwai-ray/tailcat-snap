@@ -6,9 +6,8 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 import helpers
+import pytest
 
 CLIENT_KEY = "tc_test_allow_client"
 

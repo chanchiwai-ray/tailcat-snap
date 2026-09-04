@@ -17,9 +17,8 @@ import glob
 import os
 import time
 
-import pytest
-
 import helpers
+import pytest
 
 PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SNAP_CONTAINER_PATH = "/root/tailcat.snap"
@@ -87,11 +86,15 @@ def _provision_container(name: str, snap_path: str) -> None:
     _wait_for_network(name)
     _wait_for_snapd(name)
 
-    push = helpers.run(["lxc", "file", "push", snap_path, f"{name}{SNAP_CONTAINER_PATH}"], timeout=60)
+    push = helpers.run(
+        ["lxc", "file", "push", snap_path, f"{name}{SNAP_CONTAINER_PATH}"], timeout=60
+    )
     if push.returncode != 0:
         raise RuntimeError(f"lxc file push to {name} failed: {push.output}")
 
-    install = helpers.lxc_exec(name, f"snap install --dangerous {SNAP_CONTAINER_PATH}", timeout=120)
+    install = helpers.lxc_exec(
+        name, f"snap install --dangerous {SNAP_CONTAINER_PATH}", timeout=120
+    )
     if install.returncode != 0:
         raise RuntimeError(f"snap install --dangerous on {name} failed: {install.output}")
 

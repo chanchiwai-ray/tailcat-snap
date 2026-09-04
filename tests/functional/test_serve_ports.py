@@ -18,12 +18,16 @@ def _http_body_ok(client: str, addr: str, port: int) -> str:
 
 
 def test_serve_port(server, client, server_workdir):
-    helpers.run_bg(server, "python3 -m http.server 18080 --directory /tmp", f"{server_workdir}/http.log")
+    helpers.run_bg(
+        server, "python3 -m http.server 18080 --directory /tmp", f"{server_workdir}/http.log"
+    )
     server_log = f"{server_workdir}/serve1.log"
     helpers.run_bg(server, "tailcat serve 18080", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "serve <port>: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     resp = _http_body_ok(client, addr, 18080)
@@ -31,12 +35,16 @@ def test_serve_port(server, client, server_workdir):
 
 
 def test_serve_all(server, client, server_workdir):
-    helpers.run_bg(server, "python3 -m http.server 18081 --directory /tmp", f"{server_workdir}/http.log")
+    helpers.run_bg(
+        server, "python3 -m http.server 18081 --directory /tmp", f"{server_workdir}/http.log"
+    )
     server_log = f"{server_workdir}/serve2.log"
     helpers.run_bg(server, "tailcat serve all", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "serve all: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     resp = _http_body_ok(client, addr, 18081)
@@ -44,12 +52,16 @@ def test_serve_all(server, client, server_workdir):
 
 
 def test_serve_combined_port_and_no_auth_ssh(server, client, server_workdir):
-    helpers.run_bg(server, "python3 -m http.server 18082 --directory /tmp", f"{server_workdir}/http.log")
+    helpers.run_bg(
+        server, "python3 -m http.server 18082 --directory /tmp", f"{server_workdir}/http.log"
+    )
     server_log = f"{server_workdir}/serve3.log"
     helpers.run_bg(server, "tailcat serve 18082,no-auth-ssh", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "combined serve: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.settle()
     resp = _http_body_ok(client, addr, 18082)
@@ -59,4 +71,6 @@ def test_serve_combined_port_and_no_auth_ssh(server, client, server_workdir):
     ssh_out = helpers.lxc_exec_retry(
         client, f"timeout 15 tailcat ssh {addr} 'echo combo-ssh-ok'", timeout=20
     ).output
-    assert "combo-ssh-ok" in ssh_out, "combined serve: no-auth-ssh does not work in the same server"
+    assert "combo-ssh-ok" in ssh_out, (
+        "combined serve: no-auth-ssh does not work in the same server"
+    )

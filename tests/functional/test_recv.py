@@ -17,7 +17,9 @@ def test_recv_flat(server, client, server_workdir, client_workdir):
     helpers.run_bg(server, f"tailcat recv {inbox}", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "recv setup: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     log_contents = helpers.read_file(server, server_log) or ""
     assert "write-only" in log_contents, "recv does not announce a write-only drop box"
@@ -25,7 +27,9 @@ def test_recv_flat(server, client, server_workdir, client_workdir):
     drop_file = f"{client_workdir}/drop.txt"
     helpers.write_file(client, drop_file, f"dropped file {int(time.time())}\n")
     helpers.settle()
-    result = helpers.lxc_exec_retry(client, f"timeout 15 tailcat cp {drop_file} {addr}:", timeout=20)
+    result = helpers.lxc_exec_retry(
+        client, f"timeout 15 tailcat cp {drop_file} {addr}:", timeout=20
+    )
     assert result.returncode == 0, "recv did not accept an upload"
 
     # Flat mode saves under a server-chosen unique name, not the original
@@ -45,9 +49,13 @@ def test_recv_accept_dirs(server, client, server_workdir, client_workdir):
     helpers.run_bg(server, f"tailcat recv --accept-dirs {inbox_dirs}", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "recv --accept-dirs setup: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
-    result = helpers.lxc_exec_retry(client, f"timeout 15 tailcat cp -r {docs_dir} {addr}:docs", timeout=20)
+    result = helpers.lxc_exec_retry(
+        client, f"timeout 15 tailcat cp -r {docs_dir} {addr}:docs", timeout=20
+    )
     assert result.returncode == 0, "recv --accept-dirs did not accept a recursive upload"
 
     assert helpers.file_exists(server, f"{inbox_dirs}/docs/x.txt"), (

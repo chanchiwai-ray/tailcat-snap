@@ -7,9 +7,8 @@ Single-container -- genkey doesn't need a peer.
 
 from __future__ import annotations
 
-import pytest
-
 import helpers
+import pytest
 
 KEYS = [
     "tc_test_basic",
@@ -41,7 +40,9 @@ def test_genkey_basic_list_delete(server):
 
 
 def test_genkey_client(server):
-    out = helpers.lxc_exec(server, "tailcat genkey --client --key=tc_test_client --force", timeout=15).output
+    out = helpers.lxc_exec(
+        server, "tailcat genkey --client --key=tc_test_client --force", timeout=15
+    ).output
     assert "nodekey:" in out
 
 

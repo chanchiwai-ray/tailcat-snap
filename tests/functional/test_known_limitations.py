@@ -18,7 +18,9 @@ def test_cp_local_path_outside_home_fails(server, client, server_workdir):
     helpers.run_bg(server, f"tailcat serve --files={rw_dir}:rw files", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "cp-outside-home setup: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     helpers.write_file(client, "/tmp/tailcat_outside_home_test.txt", "should fail\n")
     helpers.settle()
@@ -37,7 +39,9 @@ def test_socks_cmd_curl_not_visible_inside_confinement(server, client, server_wo
     helpers.run_bg(server, "tailcat serve 18099", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "socks <cmd> setup: server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     out = helpers.lxc_exec_retry(
         client, f"timeout 15 tailcat socks {addr} curl -s http://server.tailcat:18099/", timeout=20

@@ -15,3 +15,16 @@ addopts = "-ra -v"
 markers = [
     "integration: real-network tests against live Tailscale DERP infrastructure",
 ]
+
+[tool.ruff]
+line-length = 99
+preview = true
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "C90", "N", "I"]
+ignore = ["E501", "N818"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.6",
+]

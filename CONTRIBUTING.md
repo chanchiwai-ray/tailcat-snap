@@ -11,6 +11,10 @@
 - [uv](https://docs.astral.sh/uv/) -- used to manage the Python
   environment for the test suite (e.g. `sudo snap install astral-uv
   --classic`, which provides the `uv` command).
+- [just](https://just.systems/) (optional) -- a convenience wrapper
+  around the build/lint/test commands below (e.g. `sudo snap install
+  just --classic`). Every `just` recipe has an equivalent raw command
+  documented alongside it, so it isn't required.
 
 ## Build
 
@@ -18,6 +22,7 @@ From the repo root:
 
 ```sh
 snapcraft pack
+# or: just build
 ```
 
 This pulls the `tailcat` source, builds it, and packs
@@ -54,6 +59,7 @@ hairpinning limitation, not a bug in tailcat or this packaging).
 ```sh
 cd tests
 uv run pytest functional/
+# or, from the repo root: just test
 ```
 
 This will build `tailcat_<version>_amd64.snap` first (via `snapcraft
@@ -71,3 +77,15 @@ The tests exercise real Tailscale DERP relay infrastructure over the
 network -- see [`docs/available_features.md`](docs/available_features.md)
 and [`docs/known_issues.md`](docs/known_issues.md) for what they cover
 and any known caveats.
+
+## Lint / format
+
+The test suite is linted and formatted with
+[ruff](https://docs.astral.sh/ruff/), configured in
+[`tests/pyproject.toml`](tests/pyproject.toml):
+
+```sh
+cd tests
+uv run ruff check .    # or, from the repo root: just lint
+uv run ruff format .   # or, from the repo root: just format
+```

@@ -15,7 +15,9 @@ def test_basic_pipe_round_trip(server, client, server_workdir, client_workdir):
     helpers.run_bg(server, "tailcat", server_log)
     addr = helpers.wait_for_addr(server, server_log, timeout=10)
     assert addr, "server never printed an address"
-    assert helpers.wait_until_ready(client, addr), "server never became ready to accept connections"
+    assert helpers.wait_until_ready(client, addr), (
+        "server never became ready to accept connections"
+    )
 
     msg = f"hello from test_pipe_ping {int(time.time())}"
     helpers.settle()
@@ -98,6 +100,8 @@ conn.close()
     assert addr
     time.sleep(1)
 
-    assert helpers.file_exists(server, recv_log), "TAILCAT_ADDR_FILE tcp: mode: listener never received anything"
+    assert helpers.file_exists(server, recv_log), (
+        "TAILCAT_ADDR_FILE tcp: mode: listener never received anything"
+    )
     received = (helpers.read_file(server, recv_log) or "").strip()
     assert received == addr

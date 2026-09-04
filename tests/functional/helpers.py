@@ -158,7 +158,9 @@ def wait_for_cloudinit(container: str, timeout: float = 180, interval: float = 2
     return False  # pragma: no cover -- Retrying always either returns or raises above
 
 
-def wait_for_addr(container: str, logfile: str, timeout: float = 15, interval: float = 0.5) -> str | None:
+def wait_for_addr(
+    container: str, logfile: str, timeout: float = 15, interval: float = 0.5
+) -> str | None:
     """Poll `logfile` inside `container` until a tco... tailcat address
     appears, or timeout. Returns the address, or None.
 
@@ -166,7 +168,9 @@ def wait_for_addr(container: str, logfile: str, timeout: float = 15, interval: f
     actually ready to accept incoming connections yet -- see
     wait_until_ready() below, which callers should use afterwards before
     connecting to it."""
-    return wait_for_pattern(container, logfile, r"(tco[A-Za-z0-9_-]+)", timeout=timeout, interval=interval)
+    return wait_for_pattern(
+        container, logfile, r"(tco[A-Za-z0-9_-]+)", timeout=timeout, interval=interval
+    )
 
 
 def wait_for_pattern(
@@ -255,13 +259,13 @@ def wait_until_ready(
 # ready, *individual* later connections can still occasionally hit one of
 # these transiently, since each is a fresh DERP-relayed/WireGuard
 # handshake over the real internet.
-TRANSIENT_ERROR_MARKERS = (
-    "context deadline exceeded",
-)
+TRANSIENT_ERROR_MARKERS = ("context deadline exceeded",)
 
 
 def _looks_transient(result: Result) -> bool:
-    return result.returncode != 0 and any(marker in result.output for marker in TRANSIENT_ERROR_MARKERS)
+    return result.returncode != 0 and any(
+        marker in result.output for marker in TRANSIENT_ERROR_MARKERS
+    )
 
 
 def lxc_exec_retry(
@@ -386,7 +390,9 @@ def write_file(container: str, path: str, content: str) -> None:
 
 
 def count_files(container: str, dir_path: str) -> int:
-    result = lxc_exec(container, f"find {shlex.quote(dir_path)} -type f 2>/dev/null | wc -l", timeout=10)
+    result = lxc_exec(
+        container, f"find {shlex.quote(dir_path)} -type f 2>/dev/null | wc -l", timeout=10
+    )
     try:
         return int(result.stdout.strip())
     except ValueError:
