@@ -13,22 +13,3 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: custom
-    directory: /snap
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: chore
-      include: scope
-    registries:
-      - tailcat-upstream
-    allow:
-      - dependency-name: tailcat
-    version-field: version
-
-registries:
-  tailcat-upstream:
-    type: git
-    tag-prefix: v
-    url: https://github.com/tailscale/tailcat.git
-
