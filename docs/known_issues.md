@@ -298,20 +298,3 @@ shifted) root user, not inside a nested unprivileged container.
 container (or likely any other uid-shifted user-namespace sandbox); it does not affect normal
 installs on a real machine or VM, and is unrelated to anything in this project's own
 `snap/snapcraft.yaml` packaging.
-
-### 7. `tailcat forward` has no ephemeral (`0:remote`) local-port syntax
-
-Also discovered while building the two-container functional test suite. `tailcat forward`'s own
-`--help` only documents `<tc-addr> <port>` (same local/remote) or `<tc-addr>
-<local:remote>` with an explicit, non-zero local port -- there's no "let the OS pick a free local
-port" convention (e.g. `0:remote`, common in other port-forwarding tools):
-
-```sh
-$ tailcat forward "$ADDR" 0:18091
-mapping "0:18091" is invalid: local port: invalid port "0"
-```
-
-This is a real (minor) upstream CLI behavior, not a packaging/confinement issue --
-[`../tests/functional/test_exit_node_and_proxying.py`](../tests/functional/test_exit_node_and_proxying.py)'s
-`test_forward` now just picks a fixed local port itself (e.g. `28091:18091`) instead of trying to
-parse an auto-assigned one back out of `forward`'s output, which doesn't print one anyway.

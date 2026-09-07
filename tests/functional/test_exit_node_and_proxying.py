@@ -22,16 +22,10 @@ def test_forward(server, client, server_workdir, client_workdir):
     )
 
     helpers.settle()
-    # tailcat forward's docs only show <tc-addr> <port> (same local/remote)
-    # or <tc-addr> <local:remote> with an explicit non-zero local port --
-    # there's no "0:remote" ephemeral-local-port syntax (confirmed: it
-    # errors with `mapping "0:18091" is invalid: local port: invalid port
-    # "0"`), so we just pick a fixed local port ourselves instead of
-    # trying to parse one back out of the command's output.
-    local_port = 28091
     client_log = f"{client_workdir}/fwd_client.log"
-    helpers.run_bg(client, f"tailcat forward {addr} {local_port}:18091", client_log)
-    helpers.settle()
+    helpers.run_bg(client, f"tailcat forward {addr} 0:18091", client_log)
+    local_port = helpers.wait_for_pattern(client, client_log, r":(\d+) -> remote", timeout=15)
+    assert local_port, "forward: never printed the ephemeral local port it chose"
 
     code = helpers.lxc_exec_retry(
         client,
