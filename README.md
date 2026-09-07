@@ -17,11 +17,11 @@ tailcat --help
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for how to build this
 package from source and run its test suite locally.
 
-## Available feature and known limitations
+## Available features and known issues
 
 This is a strictly confined snap, so some features may not be available due to AppArmor
 restrictions. Please see [available features](./docs/available_features.md) and [known
-limitations](./docs/known_limitations.md) for more information.
+issues](./docs/known_issues.md) for more information.
 
 ## License
 

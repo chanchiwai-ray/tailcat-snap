@@ -1,4 +1,4 @@
-# Available Features (Verified Working Under Strict Confinement)
+# Available Features Under Strict Confinement
 
 This document lists the `tailcat` functionality that was manually verified to work correctly when
 installed as a strictly confined snap (`confinement: strict`) with only the `home`, `network`, and
@@ -171,11 +171,10 @@ tunnel entirely in userspace, with no root/admin privileges and no kernel TUN/TA
 ## File copy and remote shell (`cp`, `ssh`)
 
 Both subcommands work by exec'ing the system `scp`/`ssh` with a `ProxyCommand` that re-invokes
-`tailcat` itself for the tunnel transport. The part now stages `openssh-client` (`stage-packages:
-[openssh-client]`) and uses a `layout` bind-mount to satisfy `scp`'s compile-time hardcoded path to
-`ssh`; see
-[`known_issues.md`](./known_issues.md#3-tailcat-cptailcat-ssh-client-side-fixed-by-bundling-openssh--a-layout-bind-mount)
-for the full before/after and why the fix needed two parts.
+`tailcat` itself for the tunnel transport. This requires bundling `openssh-client` and a `layout`
+bind-mount (see `snap/snapcraft.yaml` and
+[`known_issues.md`](./known_issues.md#3-tailcat-cptailcat-ssh-client-side-requires-bundling-openssh--a-layout-bind-mount)
+for why).
 
 - **`tailcat cp <local-file> <tc-addr>:`** / **`tailcat cp -r`** / **`tailcat cp -p`.**
   Copied files and directory trees to/from `tailcat recv`/`serve --files` targets in both
@@ -216,8 +215,8 @@ for the full before/after and why the fix needed two parts.
 
 Under the snap's current strict-confinement plug set (`home`, `network`, `network-bind`), plus a
 bundled `openssh-client` and a `layout` bind-mount, essentially all of tailcat's documented
-functionality works correctly and was verified against the real, public DERP relay infrastructure,
-including exit-node traffic routing and the SOCKS5 proxy. The remaining caveats are narrow and
-documented in `known_issues.md`: `genkey`'s storage path differs from upstream docs (an env-var
-remapping, not a filesystem restriction), file-serving paths must be under the real `$HOME`, and
-only an allowlisted set of system binaries can be exec'd inside a remote `ssh` shell session.
+functionality works correctly, including exit-node traffic routing and the SOCKS5 proxy. The
+remaining caveats are narrow and documented in `known_issues.md`: `genkey`'s storage path differs
+from upstream docs (an env-var remapping, not a filesystem restriction), file-serving paths must be
+under the real `$HOME`, and only an allowlisted set of system binaries can be exec'd inside a
+remote `ssh` shell session.
