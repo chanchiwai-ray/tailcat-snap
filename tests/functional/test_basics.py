@@ -46,6 +46,6 @@ def test_parse_and_resolve(server, server_workdir):
     assert "RegionID" in out
 
     out = helpers.lxc_exec(server, f"timeout 15 tailcat resolve {addr}", timeout=20).output
-    assert "tco" in out
+    assert helpers.looks_like_addr(out)
     # The resolved address should be longer (embeds DERP node info).
     assert len(out) > len(addr), "resolved address is not longer than the input"

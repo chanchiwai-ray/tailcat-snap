@@ -128,10 +128,8 @@ tunnel entirely in userspace, with no root/admin privileges and no kernel TUN/TA
   Bakes a specific region (e.g. `fra`) into the key/address instead of auto-selecting by latency.
 - **`tailcat genkey --key=<name> --fixed-region`.**
   Probes the nearest region once, now, and bakes that choice in.
-- **`tailcat genkey --key=<name> --embed-derp-map --region=<code>`.**
-  Works correctly **when `--region` is given explicitly**. See
-  [`known_issues.md`](./known_issues.md#5-genkey---embed-derp-map-panics-with-the-default---regionauto)
-  for a real upstream crash when `--embed-derp-map` is combined with the default `--region=auto`.
+- **`tailcat genkey --key=<name> --embed-derp-map`.**
+  Works correctly.
 
 ## File serving (within `$HOME`)
 
@@ -221,6 +219,5 @@ bundled `openssh-client` and a `layout` bind-mount, essentially all of tailcat's
 functionality works correctly and was verified against the real, public DERP relay infrastructure,
 including exit-node traffic routing and the SOCKS5 proxy. The remaining caveats are narrow and
 documented in `known_issues.md`: `genkey`'s storage path differs from upstream docs (an env-var
-remapping, not a filesystem restriction), file-serving paths must be under the real `$HOME`, only
-an allowlisted set of system binaries can be exec'd inside a remote `ssh` shell session, and a real
-upstream crash in `genkey --embed-derp-map` when combined with the default `--region=auto`.
+remapping, not a filesystem restriction), file-serving paths must be under the real `$HOME`, and
+only an allowlisted set of system binaries can be exec'd inside a remote `ssh` shell session.

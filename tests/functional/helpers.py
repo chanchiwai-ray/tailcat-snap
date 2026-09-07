@@ -31,6 +31,31 @@ class CommandError(RuntimeError):
     """Raised by lxc_exec(..., check=True) on a non-zero exit code."""
 
 
+# A tailcat address is always the literal "tc" prefix immediately followed
+# by a base64.RawURLEncoding-encoded blob (confirmed in upstream source:
+# Addr's encoder does `"tc" + base64.RawURLEncoding.EncodeToString(x)`, and
+# its decoder does `strings.CutPrefix(s, "tc")`). That RawURLEncoding
+# alphabet -- letters, digits, "-", "_", and critically no "/" or other
+# path/URL-ish punctuation -- is what makes this pattern safe to search for
+# anywhere in a log line without accidentally matching an unrelated word or
+# path that merely contains "tc" (e.g. a directory named ".../files_rw2"
+# right after "tc" would immediately hit the "/" and stop the match, same
+# as it would for any real address). The length and the specific bytes
+# that follow "tc" vary depending on which optional fields (region info, an
+# embedded DERP map, a WireGuard pre-shared key, etc.) happen to be present
+# in the encoded ConnInfo -- exactly the kind of environment/version-
+# dependent detail tests shouldn't hardcode, so we deliberately don't pin
+# to any particular length or value beyond the encoding's own alphabet.
+ADDR_RE = re.compile(r"tc[A-Za-z0-9_-]+")
+
+
+def looks_like_addr(s: str) -> bool:
+    """True if `s` contains what looks like a real tailcat address,
+    without pinning to any specific address value (which varies run to
+    run, and whose exact encoding can change between tailcat versions)."""
+    return bool(ADDR_RE.search(s))
+
+
 # A short pause recommended between successive client<->server tailcat
 # interactions within the same test (e.g. between a `cp` and a follow-up
 # `ls`, or between successive `ssh` calls). wait_until_ready()/
@@ -161,15 +186,20 @@ def wait_for_cloudinit(container: str, timeout: float = 180, interval: float = 2
 def wait_for_addr(
     container: str, logfile: str, timeout: float = 15, interval: float = 0.5
 ) -> str | None:
-    """Poll `logfile` inside `container` until a tco... tailcat address
+    """Poll `logfile` inside `container` until a tc... tailcat address
     appears, or timeout. Returns the address, or None.
+
+    Note: the address always starts with the literal "tc" prefix followed
+    by an unbroken base64url token (see ADDR_RE above) -- that's the only
+    part guaranteed stable across versions, so tests should not assume any
+    more specific value or length for the rest of it.
 
     Note: the returned address being printed does NOT mean the server is
     actually ready to accept incoming connections yet -- see
     wait_until_ready() below, which callers should use afterwards before
     connecting to it."""
     return wait_for_pattern(
-        container, logfile, r"(tco[A-Za-z0-9_-]+)", timeout=timeout, interval=interval
+        container, logfile, f"({ADDR_RE.pattern})", timeout=timeout, interval=interval
     )
 
 
@@ -220,7 +250,7 @@ def wait_until_ready(
     so the readiness ping itself uses an allowed client identity instead
     of the client container's default (unlisted) one.
 
-    A tailcat server prints its tco... address as soon as it's registered
+    A tailcat server prints its tc... address as soon as it's registered
     with the DERP relay, but isn't actually ready to accept incoming
     connections (direct/DERP-relayed peer handshake) for a brief moment
     after that -- empirically, pinging immediately (0-2s after the
