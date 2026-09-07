@@ -2,7 +2,7 @@
 # This is an unofficial, community-maintained snap packaging of tailcat.
 name: tailcat
 base: core24
-version: 0.5.0
+version: 0.6.0
 contact: chanchiwairay@gmail.com
 issues: https://github.com/chanchiwai-ray/tailcat-snap/issues
 summary: Like netcat, but over Tailscale's data plane, without the control plane

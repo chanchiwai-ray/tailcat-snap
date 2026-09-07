@@ -19,7 +19,6 @@ doesn't, with the underlying cause for each failure.
 | `--allow` (client allowlisting) | ✅ Yes | |
 | `--full-address` / `--json` | ✅ Yes | |
 | `tailcat genkey` | ⚠️ Partially | Works, but writes keys under the snap's private data dir, not the real `$HOME/.config/tailcat` upstream docs describe |
-| `tailcat genkey --embed-derp-map` (default `--region=auto`) | ❌ Crashes | Real upstream nil-pointer panic, unrelated to snap packaging -- see #5 |
 | `tailcat recv <dir>` / `tailcat serve --files` | ⚠️ Partially | Only works for paths under the real `$HOME`; fails for paths elsewhere (e.g. `/tmp`) |
 | `tailcat cp` | ✅ Yes (fixed) | Originally failed (see below); fixed by bundling `openssh-client` plus a `layout` bind-mount for `scp`'s hardcoded `ssh` path. Local-side paths must also be under `$HOME` (same `home`-plug restriction as `recv`) |
 | `tailcat ssh` (run a remote command) | ✅ Yes (fixed) | Same fix as `cp`. Lands the session in the server's real `$HOME`, as documented in the source (`newSessionCommand` sets `cmd.Dir = u.HomeDir`) |
@@ -229,51 +228,7 @@ given the literal absolute path (or `~/abc.txt`, since the invoking shell -- not
 process -- expands `~` before tailcat ever sees the argument). Only paths outside `$HOME` entirely,
 or dotfiles/dot-directories directly under it, are actually restricted.
 
-### 5. `genkey --embed-derp-map` panics with the default `--region=auto`
-
-This is a **real bug in upstream tailcat itself**, not a packaging or confinement issue --
-reproduced identically on an unconfined, from-source build read directly from
-[`github.com/tailscale/tailcat`](https://github.com/tailscale/tailcat)'s `cmd/tailcat/tailcat.go`:
-
-```sh
-$ tailcat genkey --key=testembed --embed-derp-map --force
-panic: runtime error: invalid memory address or nil pointer dereference
-[signal SIGSEGV: segmentation violation code=0x1 addr=0x48 pc=0xb22c08]
-
-goroutine 1 [running]:
-main.genKey({0x305da2cbc090?, 0x305da2cbc070?, 0xb9caa9?})
-	/root/parts/tailcat/build/cmd/tailcat/tailcat.go:1701 +0xfc8
-```
-
-**Root cause** (confirmed by reading the actual source): `--region` defaults to `"auto"`. When
-`*region == "auto"`, `genKey` sets a sentinel `priv.Public.RegionID = -1` to mean "not yet
-resolved," expecting the *server* (not `genkey`) to resolve it later at startup. But the code path
-that would normally resolve a concrete region ID right away only triggers when `*region == ""`
-(empty string), which is a different condition than `"auto"` -- so that resolution never runs here.
-Then, because `--embed-derp-map` was given, the code unconditionally does:
-
-```go
-reg := dm.Regions[ci.RegionID]      // ci.RegionID is still -1 (the sentinel)
-reg.Nodes = reg.Nodes[:min(2, len(reg.Nodes))]   // reg is nil -> panic
-```
-
-`dm.Regions` is a `map[int]*tailcfg.DERPRegion` keyed by real region IDs (e.g. `303`); indexing it
-with the sentinel `-1` returns a nil map value (no error), and the very next line dereferences that
-nil pointer.
-
-**Workaround:** always pass an explicit `--region=<code>` (or `--region=<id>`, or a custom
-hostname) alongside `--embed-derp-map`; only the default `--region=auto` triggers the crash:
-
-```sh
-$ tailcat genkey --key=testembed --embed-derp-map --region=fra --force
-# wrote file to ~/.config/tailcat/keys/testembed.private.json
-tco2FwWCD...  # (address with embedded DERP node info)
-```
-
-`--fixed-region` alone (without `--embed-derp-map`) is unaffected, since it doesn't reach the same
-code path.
-
-### 6. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
+### 5. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
 
 `tailcat socks`'s documented examples include running a `<cmd>` (like `curl`) as a child process
 with the proxy's address in its `all_proxy` environment variable. Under strict confinement, this
@@ -302,7 +257,7 @@ the open internet (see `available_features.md`). The same `stage-packages` bundl
 for `openssh-client` (issue #3) could in principle bundle `curl` too, if execing it as a direct
 `<cmd>` child of the confined `tailcat` process were a hard requirement.
 
-### 7. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
+### 6. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
 
 Discovered while building the two-container functional test suite under [`../tests/`](../tests/)
 (each "client"/"server" is a separate, unprivileged LXD container so they have genuinely distinct
@@ -344,7 +299,7 @@ container (or likely any other uid-shifted user-namespace sandbox); it does not 
 installs on a real machine or VM, and is unrelated to anything in this project's own
 `snap/snapcraft.yaml` packaging.
 
-### 8. `tailcat forward` has no ephemeral (`0:remote`) local-port syntax
+### 7. `tailcat forward` has no ephemeral (`0:remote`) local-port syntax
 
 Also discovered while building the two-container functional test suite. `tailcat forward`'s own
 `--help` only documents `<tc-addr> <port>` (same local/remote) or `<tc-addr>
