@@ -2,10 +2,30 @@
 
 This document lists the `tailcat` functionality that was manually verified to work correctly when
 installed as a strictly confined snap (`confinement: strict`) with only the `home`, `network`, and
-`network-bind` plugs connected -- the default, auto-connected set for this package. Every
-subcommand and flag in `tailcat --help` is covered here or in
+`network-bind` plugs connected -- the default, auto-connected set for this package.
+
+Every subcommand and flag in `tailcat --help` is covered here or in
 [`known_issues.md`](./known_issues.md). See [`../tests/`](../tests/) for automated scripts that
 reproduce these checks, and [`../CONTRIBUTING.md`](../CONTRIBUTING.md) for how to run them.
+
+## Summary table
+
+| Feature | Works under strict confinement? | Notes |
+|---|---|---|
+| `tailcat` (basic stdin/stdout pipe) | ✅ Yes | |
+| `tailcat ping` | ✅ Yes | |
+| `tailcat serve <port>` / `serve all` / combined services | ✅ Yes | |
+| `tailcat serve exit-node` + `socks`/`ssh -p ip:port` | ✅ Yes | Full traffic routing verified, including to the open internet |
+| `tailcat socks` | ✅ Yes | Except execing `curl`/other external tools as `<cmd>` -- see `known_issues.md` #5 |
+| `tailcat forward` | ✅ Yes | |
+| `tailcat ls` / `parse` / `resolve` / `printpub` / `version` / `readme` | ✅ Yes | |
+| `--allow` (client allowlisting) | ✅ Yes | |
+| `--full-address` / `--json` | ✅ Yes | |
+| `tailcat cp` | ✅ Yes | Requires bundling `openssh-client` plus a `layout` bind-mount for `scp`'s hardcoded `ssh` path (see `snap/snapcraft.yaml`). Local-side paths must also be under `$HOME` (same `home`-plug restriction as `recv`) |
+| `tailcat ssh` | ⚠️ Partially | Only a curated allowlist of coreutils/utilities is exec-able inside an interactive shell session on the confined server (e.g. `ls`, `id`, `bash` work; `whoami` does not); lands the session in the server's real `$HOME` |
+| `tailcat genkey` | ⚠️ Partially | Works, but writes keys under the snap's private data dir, not the real `$HOME/.config/tailcat` upstream docs describe |
+| `tailcat recv <dir>` / `tailcat serve --files` | ⚠️ Partially | Only works for paths under the real `$HOME`; fails for paths elsewhere (e.g. `/tmp`) |
+| `tailcat socks <addr> curl ...` (execing external tools) | ❌ No | `curl` (and most non-bundled system tools) aren't visible inside the snap's confined filesystem view at all -- see `known_issues.md` #5 |
 
 ## CLI basics
 

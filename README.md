@@ -12,10 +12,14 @@ sudo snap install tailcat
 tailcat --help
 ```
 
+## Security
+
+See [SECURITY.md](./SECURITY.md) for information about security issues and how to report them.
+
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for how to build this
-package from source and run its test suite locally.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for how to build this package from source and run its
+test suite locally.
 
 ## Available features and known issues
 

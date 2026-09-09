@@ -2,32 +2,11 @@
 
 This document lists behaviors observed while testing the `tailcat` snap under `confinement: strict`
 with only the `home`, `network`, and `network-bind` plugs connected (see [`../tests/`](../tests/)
-for the automated pytest suite that reproduces these checks). It separates what works from what
-doesn't, with the underlying cause for each failure.
+for the automated pytest suite that reproduces these checks). See
+[`available_features.md`](./available_features.md) for the full at-a-glance summary table of what
+works; this document covers the underlying cause and details for each issue/limitation.
 
-## Summary table
-
-| Feature | Works under strict confinement? | Notes |
-|---|---|---|
-| `tailcat` (basic stdin/stdout pipe) | ✅ Yes | |
-| `tailcat ping` | ✅ Yes | |
-| `tailcat serve <port>` / `serve all` / combined services | ✅ Yes | |
-| `tailcat serve exit-node` + `socks`/`ssh -p ip:port` | ✅ Yes | Full traffic routing verified, including to the open internet |
-| `tailcat socks` | ✅ Yes | Except execing `curl`/other external tools as `<cmd>` -- see #6 |
-| `tailcat forward` | ✅ Yes | |
-| `tailcat ls` / `parse` / `resolve` / `printpub` / `version` / `readme` | ✅ Yes | |
-| `--allow` (client allowlisting) | ✅ Yes | |
-| `--full-address` / `--json` | ✅ Yes | |
-| `tailcat genkey` | ⚠️ Partially | Works, but writes keys under the snap's private data dir, not the real `$HOME/.config/tailcat` upstream docs describe |
-| `tailcat recv <dir>` / `tailcat serve --files` | ⚠️ Partially | Only works for paths under the real `$HOME`; fails for paths elsewhere (e.g. `/tmp`) |
-| `tailcat cp` | ✅ Yes | Requires bundling `openssh-client` plus a `layout` bind-mount for `scp`'s hardcoded `ssh` path (see `snap/snapcraft.yaml`). Local-side paths must also be under `$HOME` (same `home`-plug restriction as `recv`) |
-| `tailcat ssh` (run a remote command) | ✅ Yes | Same requirements as `cp`. Lands the session in the server's real `$HOME`, as documented in the source (`newSessionCommand` sets `cmd.Dir = u.HomeDir`) |
-| `tailcat ssh`/server-side shell: arbitrary coreutils | ⚠️ Partially | Only a curated allowlist of coreutils/utilities is exec-able inside an interactive shell session on the confined server (e.g. `ls`, `id`, `bash` work; `whoami` does not) |
-| `tailcat socks <addr> curl ...` (execing external tools) | ❌ No | `curl` (and most non-bundled system tools) aren't visible inside the snap's confined filesystem view at all -- see #6 |
-
-## Details
-
-### 1. `genkey` writes to the snap's private data directory, not `$HOME`
+## 1. `genkey` writes to the snap's private data directory, not `$HOME`
 
 Upstream docs (and `tailcat --help`) say keys are saved to
 `~/.config/tailcat/keys/<name>.private.json`. Under strict confinement with the `home` interface,
@@ -56,7 +35,7 @@ tailcat genkey --key=testkey
 # wrote file to /home/sandbox/snap/tailcat/x1/.config/tailcat/keys/testkey.private.json
 ```
 
-### 2. File-serving subcommands (`recv`, `serve --files`) only work under `$HOME`
+## 2. File-serving subcommands (`recv`, `serve --files`) only work under `$HOME`
 
 The `home` plug only grants access to the user's actual home directory tree (and, transparently,
 the snap's own data dir under it). Paths outside `$HOME` -- such as `/tmp`, another user's home, or
@@ -85,7 +64,7 @@ arbitrary directories, not just ones under `$HOME`), the snap would need additio
 as `removable-media` and/or `system-files`, and users would need to manually connect them (`snap
 connect tailcat:removable-media`), since they don't auto-connect under strict confinement.
 
-### 3. `tailcat cp`/`tailcat ssh` (client side): requires bundling OpenSSH + a `layout` bind-mount
+## 3. `tailcat cp`/`tailcat ssh` (client side): requires bundling OpenSSH + a `layout` bind-mount
 
 Per upstream docs, `tailcat cp` "runs the system `scp`" and `tailcat ssh` "execs the system ssh
 client," both via a `ProxyCommand` that re-invokes `tailcat` itself for the actual tunnel
@@ -139,7 +118,7 @@ $ tailcat cp /tmp/hack.txt "$ADDR":
 
 while the identical command with the local file under `$HOME` works normally.
 
-### 4. Filesystem access: real `$HOME` vs. the `$HOME` env var
+## 4. Filesystem access: real `$HOME` vs. the `$HOME` env var
 
 These are two different things and it's easy to conflate them (this document's own earlier drafts
 did):
@@ -176,7 +155,7 @@ given the literal absolute path (or `~/abc.txt`, since the invoking shell -- not
 process -- expands `~` before tailcat ever sees the argument). Only paths outside `$HOME` entirely,
 or dotfiles/dot-directories directly under it, are actually restricted.
 
-### 5. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
+## 5. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
 
 `tailcat socks`'s documented examples include running a `<cmd>` (like `curl`) as a child process
 with the proxy's address in its `all_proxy` environment variable. Under strict confinement, this
@@ -205,7 +184,7 @@ the open internet (see `available_features.md`). The same `stage-packages` bundl
 for `openssh-client` (issue #3) could in principle bundle `curl` too, if execing it as a direct
 `<cmd>` child of the confined `tailcat` process were a hard requirement.
 
-### 6. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
+## 6. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
 
 Discovered while building the two-container functional test suite under [`../tests/`](../tests/)
 (each "client"/"server" is a separate, unprivileged LXD container so they have genuinely distinct
