@@ -2,32 +2,11 @@
 
 This document lists behaviors observed while testing the `tailcat` snap under `confinement: strict`
 with only the `home`, `network`, and `network-bind` plugs connected (see [`../tests/`](../tests/)
-for the automated pytest suite that reproduces these checks). It separates what works from what
-doesn't, with the underlying cause for each failure.
+for the automated pytest suite that reproduces these checks). See
+[`available_features.md`](./available_features.md) for the full at-a-glance summary table of what
+works; this document covers the underlying cause and details for each issue/limitation.
 
-## Summary table
-
-| Feature | Works under strict confinement? | Notes |
-|---|---|---|
-| `tailcat` (basic stdin/stdout pipe) | ✅ Yes | |
-| `tailcat ping` | ✅ Yes | |
-| `tailcat serve <port>` / `serve all` / combined services | ✅ Yes | |
-| `tailcat serve exit-node` + `socks`/`ssh -p ip:port` | ✅ Yes | Full traffic routing verified, including to the open internet |
-| `tailcat socks` | ✅ Yes | Except execing `curl`/other external tools as `<cmd>` -- see #6 |
-| `tailcat forward` | ✅ Yes | |
-| `tailcat ls` / `parse` / `resolve` / `printpub` / `version` / `readme` | ✅ Yes | |
-| `--allow` (client allowlisting) | ✅ Yes | |
-| `--full-address` / `--json` | ✅ Yes | |
-| `tailcat genkey` | ⚠️ Partially | Works, but writes keys under the snap's private data dir, not the real `$HOME/.config/tailcat` upstream docs describe |
-| `tailcat recv <dir>` / `tailcat serve --files` | ⚠️ Partially | Only works for paths under the real `$HOME`; fails for paths elsewhere (e.g. `/tmp`) |
-| `tailcat cp` | ✅ Yes (fixed) | Originally failed (see below); fixed by bundling `openssh-client` plus a `layout` bind-mount for `scp`'s hardcoded `ssh` path. Local-side paths must also be under `$HOME` (same `home`-plug restriction as `recv`) |
-| `tailcat ssh` (run a remote command) | ✅ Yes (fixed) | Same fix as `cp`. Lands the session in the server's real `$HOME`, as documented in the source (`newSessionCommand` sets `cmd.Dir = u.HomeDir`) |
-| `tailcat ssh`/server-side shell: arbitrary coreutils | ⚠️ Partially | Only a curated allowlist of coreutils/utilities is exec-able inside an interactive shell session on the confined server (e.g. `ls`, `id`, `bash` work; `whoami` does not) |
-| `tailcat socks <addr> curl ...` (execing external tools) | ❌ No | `curl` (and most non-bundled system tools) aren't visible inside the snap's confined filesystem view at all -- see #6 |
-
-## Details
-
-### 1. `genkey` writes to the snap's private data directory, not `$HOME`
+## 1. `genkey` writes to the snap's private data directory, not `$HOME`
 
 Upstream docs (and `tailcat --help`) say keys are saved to
 `~/.config/tailcat/keys/<name>.private.json`. Under strict confinement with the `home` interface,
@@ -56,7 +35,7 @@ tailcat genkey --key=testkey
 # wrote file to /home/sandbox/snap/tailcat/x1/.config/tailcat/keys/testkey.private.json
 ```
 
-### 2. File-serving subcommands (`recv`, `serve --files`) only work under `$HOME`
+## 2. File-serving subcommands (`recv`, `serve --files`) only work under `$HOME`
 
 The `home` plug only grants access to the user's actual home directory tree (and, transparently,
 the snap's own data dir under it). Paths outside `$HOME` -- such as `/tmp`, another user's home, or
@@ -85,58 +64,22 @@ arbitrary directories, not just ones under `$HOME`), the snap would need additio
 as `removable-media` and/or `system-files`, and users would need to manually connect them (`snap
 connect tailcat:removable-media`), since they don't auto-connect under strict confinement.
 
-### 3. `tailcat cp`/`tailcat ssh` (client side): fixed by bundling OpenSSH + a `layout` bind-mount
+## 3. `tailcat cp`/`tailcat ssh` (client side): requires bundling OpenSSH + a `layout` bind-mount
 
 Per upstream docs, `tailcat cp` "runs the system `scp`" and `tailcat ssh` "execs the system ssh
 client," both via a `ProxyCommand` that re-invokes `tailcat` itself for the actual tunnel
 transport. Strict confinement's AppArmor profile does not allow the snap to exec arbitrary binaries
-outside its own confined content, so this originally failed outright:
+outside its own confined content, so the base system's `scp`/`ssh` aren't usable. `snap/snapcraft.yaml`
+addresses this by staging `openssh-client` inside the snap's own content (so exec'ing the bundled
+`ssh`/`scp` is permitted) and by adding a `layout` bind-mount for `scp`'s compile-time hardcoded
+`/usr/bin/ssh` path onto the bundled `ssh` binary -- see the comments in `snapcraft.yaml` for the
+full rationale.
+
+With both in place, `tailcat cp` and `tailcat ssh` (running a remote command) both work correctly,
+and `tailcat ssh` lands the session in the server's real (host) `$HOME`, matching the source
+(`tailcat_ssh_unix.go`'s `newSessionCommand` sets `cmd.Dir = u.HomeDir`):
 
 ```sh
-$ tailcat cp ~/upload_test.txt <tc-addr>:
-2026/09/03 04:22:26 failed to run scp: permission denied
-```
-
-```txt
-apparmor="DENIED" operation="exec" profile="snap.tailcat.tailcat" name="/usr/bin/scp" pid=28079 comm="tailcat" requested_mask="x" denied_mask="x"
-```
-
-**Fix, step 1 -- bundle the client.** Adding `stage-packages: [openssh-client]` to the `tailcat`
-part stages `ssh`/`scp` inside the snap's own content (`$SNAP/usr/bin/{ssh,scp}`). Since executing
-a binary that's part of the snap's own confined content is always permitted (an `ix` inherit-exec
-AppArmor transition -- no new confinement domain, no extra interface needed),
-`exec.LookPath("scp")` inside `tailcat cp` now finds and successfully execs the bundled `scp`.
-
-**Fix, step 2 -- `scp`'s hardcoded `ssh` path.** That alone wasn't enough. Modern OpenSSH's `scp`
-doesn't implement the transfer protocol itself; it execs `ssh` as a subprocess, and it does so via
-a **compile-time hardcoded absolute path** (confirmed with `strings usr/bin/scp | grep ssh` ->
-`/usr/bin/ssh`), not a `$PATH` lookup. So even with our bundled `scp` running, it tried to exec the
-base system's `/usr/bin/ssh` (which doesn't exist / isn't part of the snap's content) and failed:
-
-```
-apparmor="DENIED" operation="exec" profile="snap.tailcat.tailcat" name="/usr/bin/ssh" pid=31122 comm="scp" requested_mask="x" denied_mask="x"
-```
-
-The fix is a snapcraft `layout`, which bind-mounts our bundled `ssh` onto that exact hardcoded
-path, but only inside this snap's own confined mount namespace (it has no effect on the real,
-unconfined `/usr/bin/ssh` outside the snap, if one even exists on the host):
-
-```yaml
-layout:
-  /usr/bin/ssh:
-    bind-file: $SNAP/usr/bin/ssh
-```
-
-With both fixes in place, `tailcat cp` and `tailcat ssh` (running a
-remote command) both work correctly:
-
-```sh
-$ tailcat cp ~/upload_test3.txt "$ADDR":
-$ echo $?
-0
-$ cat ~/tailcat_inbox2/upload_test3.*.txt
-hello via bundled scp+layout Thu Sep  3 04:49:50 UTC 2026
-
 $ tailcat ssh "$ADDR" 'pwd; id; ls -la'
 /home/sandbox
 uid=1000(sandbox) gid=1000(sandbox) groups=1000(sandbox),27(sudo)
@@ -145,13 +88,7 @@ drwxr-x--- 10 sandbox sandbox 4096 Sep  3 04:49 .
 ...
 ```
 
-This confirms `tailcat ssh` really does drop the client into a live shell session on the server,
-rooted at the server user's actual (real, host) home directory -- matching the source
-(`tailcat_ssh_unix.go`'s `newSessionCommand` sets `cmd.Dir = u.HomeDir`), not some snap-private
-sandboxed directory. See "Filesystem access: real `$HOME` vs. the `$HOME` env var" below for what
-that home-directory access is actually scoped to.
-
-**Remaining minor caveat:** the interactive shell session on the server is still bound by the same
+**Remaining caveat:** the interactive shell session on the server is still bound by the same
 strict-confinement AppArmor rules as everything else run by this snap. A curated allowlist of
 common coreutils/shell binaries (`bash`, `dash`, `ls`, and dozens more) is permitted, but not every
 system binary -- e.g. `whoami` is not on that allowlist and fails inside an SSH session:
@@ -161,24 +98,14 @@ $ tailcat ssh "$ADDR" whoami
 /bin/bash: line 1: /usr/bin/whoami: Permission denied
 ```
 
-```
-apparmor="DENIED" operation="exec" profile="snap.tailcat.tailcat" name="/usr/bin/whoami" pid=33646 comm="bash" requested_mask="x" denied_mask="x"
-```
-
 This is a pre-existing property of snapd's default strict-confinement template (the same allowlist
-that already permitted `bash`/`ls`/etc. without any packaging changes), not something introduced by
-this fix, and there's no complete workaround short of running an unconfined (non-snap) `tailcat`,
-or `stage-packages`-bundling every individual tool a user might want to run remotely (impractical).
+that already permitted `bash`/`ls`/etc. without any packaging changes), and there's no complete
+workaround short of running an unconfined (non-snap) `tailcat`, or `stage-packages`-bundling every
+individual tool a user might want to run remotely (impractical).
 
 Also observed: `ssh` logs one harmless AppArmor denial per invocation for a system-wide config file
-it optionally reads and continues without:
-
-```
-apparmor="DENIED" operation="open" profile="snap.tailcat.tailcat" name="/etc/ssh/ssh_config" pid=33567 comm="ssh" requested_mask="r" denied_mask="r"
-```
-
-`ssh`/`scp` treat a missing/unreadable `/etc/ssh/ssh_config` as "no system-wide config," and
-proceed normally -- this did not affect any observed test outcome.
+it optionally reads and continues without (`/etc/ssh/ssh_config`); this did not affect any observed
+test outcome.
 
 **Also note:** like `recv`/`serve --files` (issue #2), `tailcat cp`'s *local*-side path (the
 non-`<tc-addr>:` argument) must be under the real `$HOME` too, since `scp` runs inside the same
@@ -191,7 +118,7 @@ $ tailcat cp /tmp/hack.txt "$ADDR":
 
 while the identical command with the local file under `$HOME` works normally.
 
-### 4. Filesystem access: real `$HOME` vs. the `$HOME` env var
+## 4. Filesystem access: real `$HOME` vs. the `$HOME` env var
 
 These are two different things and it's easy to conflate them (this document's own earlier drafts
 did):
@@ -228,7 +155,7 @@ given the literal absolute path (or `~/abc.txt`, since the invoking shell -- not
 process -- expands `~` before tailcat ever sees the argument). Only paths outside `$HOME` entirely,
 or dotfiles/dot-directories directly under it, are actually restricted.
 
-### 5. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
+## 5. `tailcat socks <addr> <cmd>` can't run most external tools (e.g. `curl`) as `<cmd>`
 
 `tailcat socks`'s documented examples include running a `<cmd>` (like `curl`) as a child process
 with the proxy's address in its `all_proxy` environment variable. Under strict confinement, this
@@ -257,7 +184,7 @@ the open internet (see `available_features.md`). The same `stage-packages` bundl
 for `openssh-client` (issue #3) could in principle bundle `curl` too, if execing it as a direct
 `<cmd>` child of the confined `tailcat` process were a hard requirement.
 
-### 6. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
+## 6. Redirecting the confined process's own stdout to a file fails silently inside an unprivileged LXD container
 
 Discovered while building the two-container functional test suite under [`../tests/`](../tests/)
 (each "client"/"server" is a separate, unprivileged LXD container so they have genuinely distinct
@@ -298,20 +225,3 @@ shifted) root user, not inside a nested unprivileged container.
 container (or likely any other uid-shifted user-namespace sandbox); it does not affect normal
 installs on a real machine or VM, and is unrelated to anything in this project's own
 `snap/snapcraft.yaml` packaging.
-
-### 7. `tailcat forward` has no ephemeral (`0:remote`) local-port syntax
-
-Also discovered while building the two-container functional test suite. `tailcat forward`'s own
-`--help` only documents `<tc-addr> <port>` (same local/remote) or `<tc-addr>
-<local:remote>` with an explicit, non-zero local port -- there's no "let the OS pick a free local
-port" convention (e.g. `0:remote`, common in other port-forwarding tools):
-
-```sh
-$ tailcat forward "$ADDR" 0:18091
-mapping "0:18091" is invalid: local port: invalid port "0"
-```
-
-This is a real (minor) upstream CLI behavior, not a packaging/confinement issue --
-[`../tests/functional/test_exit_node_and_proxying.py`](../tests/functional/test_exit_node_and_proxying.py)'s
-`test_forward` now just picks a fixed local port itself (e.g. `28091:18091`) instead of trying to
-parse an auto-assigned one back out of `forward`'s output, which doesn't print one anyway.
