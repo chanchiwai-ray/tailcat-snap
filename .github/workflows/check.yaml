@@ -32,6 +32,12 @@ jobs:
     needs:
       - lint
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - amd64
+          - arm64
     steps:
       - uses: actions/checkout@v7
 
@@ -55,6 +61,12 @@ jobs:
     needs:
       - build
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - amd64
+          - arm64
     steps:
       - uses: actions/checkout@v7
 

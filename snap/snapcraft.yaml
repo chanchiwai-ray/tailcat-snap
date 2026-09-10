@@ -3,9 +3,16 @@
 name: tailcat
 base: core24
 version: 0.6.0
+license: BSD-3-Clause
 contact: chanchiwairay@gmail.com
-issues: https://github.com/chanchiwai-ray/tailcat-snap/issues
+website: https://tailscale.com/tailcat
 summary: Like netcat, but over Tailscale's data plane, without the control plane
+issues:
+  - https://github.com/tailscale/tailcat/issues
+  - https://github.com/chanchiwai-ray/tailcat-snap/issues
+source-code:
+  - https://github.com/tailscale/tailcat
+  - https://github.com/chanchiwai-ray/tailcat-snap
 description: |
   Tailcat is a remix of Tailscale open source pieces to act like netcat, but over Tailscale's data
   plane, without Tailscale's control plane. Tailscale's data plane (magicsock) gives you
@@ -16,9 +23,12 @@ description: |
 
   Please refer to the upstream project https://github.com/tailscale/tailcat for more information.
 
-grade: devel
+grade: stable
 confinement: strict
-license: BSD-3-Clause
+
+platforms:
+  amd64:
+  arm64:
 
 apps:
   tailcat:
