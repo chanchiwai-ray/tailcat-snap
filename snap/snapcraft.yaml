@@ -2,7 +2,7 @@
 # This is an unofficial, community-maintained snap packaging of tailcat.
 name: tailcat
 base: core24
-version: 0.6.0
+version: 0.7.0
 license: BSD-3-Clause
 contact: chanchiwairay@gmail.com
 website: https://tailscale.com/tailcat
