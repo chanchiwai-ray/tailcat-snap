@@ -1,0 +1,86 @@
+name: Check upstream tailcat release
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Get current packaged version
+        id: current
+        run: |
+          version="$(awk '/^version:/ {print $2}' snap/snapcraft.yaml)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release view --repo tailscale/tailcat --json tagName -q .tagName)"
+          url="$(gh release view --repo tailscale/tailcat --json url -q .url)"
+          version="${tag#v}"
+          # Validate strict semver before this value is used anywhere else
+          # (branch name, sed, PR title/body) to guard against a malformed
+          # or malicious tag name from upstream.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected version format from upstream: '$version'" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.upstream.outputs.version }}
+        run: |
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "Already up to date ($CURRENT)"
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Update available: $CURRENT -> $LATEST"
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for existing open PR
+        id: existing
+        if: steps.compare.outputs.should_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.upstream.outputs.version }}
+        run: |
+          branch="chore/bump-tailcat-$LATEST"
+          count="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$branch" --json number -q 'length')"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version in snapcraft.yaml
+        if: steps.compare.outputs.should_update == 'true' && steps.existing.outputs.count == '0'
+        env:
+          LATEST: ${{ steps.upstream.outputs.version }}
+        run: |
+          sed -i "s/^version: .*/version: $LATEST/" snap/snapcraft.yaml
+
+      - name: Open pull request
+        if: steps.compare.outputs.should_update == 'true' && steps.existing.outputs.count == '0'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          token: ${{ secrets.BOT_PAT }}
+          branch: chore/bump-tailcat-${{ steps.upstream.outputs.version }}
+          delete-branch: true
+          commit-message: "chore: bump tailcat to ${{ steps.upstream.outputs.version }}"
+          title: "chore: bump tailcat to ${{ steps.upstream.outputs.version }}"
+          body: |
+            Bumps upstream [tailscale/tailcat](https://github.com/tailscale/tailcat) to `${{ steps.upstream.outputs.version }}`.
+
+            Release notes: ${{ steps.upstream.outputs.url }}
